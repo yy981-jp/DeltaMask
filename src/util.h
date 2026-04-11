@@ -36,7 +36,25 @@ void applyDelta2(uint8_t& v, uint8_t bits) {
 	v += delta;
 }
 
-void write(BitStream& bs, uint8_t ch, Mode mode) {
+// Bit1モードで差分からビットを復元
+uint8_t readDelta1(uint8_t original, uint8_t encoded) {
+	int delta = (int)encoded - (int)original;
+	return (delta > 0) ? 1u : 0u;
+}
+
+// Bit2モードで差分からビットを復元
+uint8_t readDelta2(uint8_t original, uint8_t encoded) {
+	int delta = (int)encoded - (int)original;
+	switch (delta) {
+		case -2: return 0u;
+		case -1: return 1u;
+		case  1: return 2u;
+		case  2: return 3u;
+		default: return 0u;
+	}
+}
+
+void write(BitStream& bs, uint8_t& ch, Mode mode) {
 	if (canUseChannel(ch, mode)) {
 		uint8_t b = bs.getBits(bitsPerChannel(mode));
 		switch (mode) {

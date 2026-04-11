@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20...4.1)
-project(DTM) # DeltaMask
+project(DM) # DeltaMask
 add_compile_options(-fdiagnostics-color=always)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

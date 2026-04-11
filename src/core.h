@@ -2,6 +2,7 @@
 
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include <random>
 
@@ -14,7 +15,7 @@
 #include <stb_image_write.h>
 
 
-void encode(Mode mode, std::string inputPng = "input.png", std::string inputBin = "input.txt", const std::string output = "output.png") {
+void encode(Mode mode, const std::string& inputPng, const std::string& inputBin, const std::string& output) {
 	std::string ext = fs::path(inputBin).extension().string().substr(1);
 	if (ext.size() > 7) throw std::runtime_error("ext must len <= 7");
 
@@ -68,8 +69,8 @@ void encode(Mode mode, std::string inputPng = "input.png", std::string inputBin 
 			break;
 
         write(bs, p.r, mode);
-        write(bs, p.b, mode);
         write(bs, p.g, mode);
+        write(bs, p.b, mode);
 	}
 
 	// PNG出力
@@ -78,4 +79,85 @@ void encode(Mode mode, std::string inputPng = "input.png", std::string inputBin 
 					pixels.data(), imageWidth * 3 // bytes
 				)
 		) throw std::runtime_error("faied to write png");
+}
+
+
+// チャネル値からビットを抽出し、BitWriterに書き込む
+void read(BitWriter& bw, uint8_t originalCh, uint8_t encodedCh, Mode mode) {
+	if (canUseChannel(originalCh, mode)) {
+		uint8_t bits;
+		switch (mode) {
+			case Mode::Bit1: 
+				bits = readDelta1(originalCh, encodedCh);
+				bw.writeBits(bits, 1);
+				break;
+			case Mode::Bit2:
+				bits = readDelta2(originalCh, encodedCh);
+				bw.writeBits(bits, 2);
+				break;
+		}
+	}
+}
+
+void decode(Mode mode, const std::string& inputOriginalPng, const std::string& inputPng, const std::string& output) {
+	// 元のPNG読み込み
+	int w, h;
+	std::vector<Pixel> originalPixels = loadPNG(inputOriginalPng, w, h);
+	uint32_t seed = fnv1a(originalPixels);
+
+	// エンコード済みPNG読み込み
+	int _w, _h;
+	std::vector<Pixel> encodedPixels = loadPNG(inputPng, _w, _h);
+
+	// indices生成＆shuffle
+	std::vector<int> indices(originalPixels.size());
+	for (int i = 0; i < (int)originalPixels.size(); i++)
+		indices[i] = i;
+
+	std::mt19937 rng(seed);
+	std::shuffle(indices.begin(), indices.end(), rng);
+
+	// ビット抽出
+	BitWriter bw;
+	for (int idx : indices) {
+		Pixel& original = originalPixels[idx];
+		Pixel& encoded = encodedPixels[idx];
+
+		read(bw, original.r, encoded.r, mode);
+		read(bw, original.g, encoded.g, mode);
+		read(bw, original.b, encoded.b, mode);
+	}
+	bw.flush();
+
+	// HeaderとDataを分離
+	const BIN& extracted = bw.get();
+	if (extracted.size() < sizeof(Header))
+		throw std::runtime_error("Extracted data too small for header");
+
+	Header hd;
+	memcpy(&hd, extracted.data(), sizeof(Header));
+
+	// bitSizeをバイト数に変換
+	size_t dataBytes = (hd.bitSize + 7) / 8;
+	if (extracted.size() < sizeof(Header) + dataBytes)
+		throw std::runtime_error("Extracted data size mismatch");
+
+	BIN data(extracted.begin() + sizeof(Header),
+	         extracted.begin() + sizeof(Header) + dataBytes);
+
+	// CRC32検証
+	if (crc32(data) != hd.crc)
+		throw std::runtime_error("CRC32 verification failed");
+
+	// ファイル出力
+	std::string outputFile = output + "." + hd.ext;
+	std::ofstream outfile(outputFile, std::ios::binary);
+	if (!outfile)
+		throw std::runtime_error("Failed to open output file");
+
+	outfile.write(reinterpret_cast<char*>(data.data()), data.size());
+	outfile.close();
+
+	std::cout << "Decoded " << dataBytes << " bytes\n"
+			  << "saved to " << outputFile << "\n";
 }

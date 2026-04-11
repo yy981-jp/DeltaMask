@@ -23,17 +23,14 @@ struct Header {
 using BIN = std::vector<uint8_t>;
 
 enum class Mode {
-	Bit1, Bit2
+	Bit1 = 1,
+	Bit2 = 2,
 };
 
 struct Pixel {
 	uint8_t r, g, b;
 };
 
-constexpr int bitsPerChannel(Mode mode) {
-	switch (mode) {
-		case Mode::Bit1: return 1;
-		case Mode::Bit2: return 2;
-	}
-	return 0;
+inline int bitsPerChannel(Mode mode) {
+	return static_cast<int>(mode);
 }
