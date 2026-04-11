@@ -7,7 +7,7 @@ int main(int argc, char* argv[]) {
 	std::vector<std::string> carg = st::charV(argc,argv);
 	if (carg.size() < 4) {
 		std::cout << "Usage: \n"
-				  << "DeltaMask v1 (c) 2026 yy981\n"
+				  << "DeltaMask v1.1 (c) 2026 yy981\n"
 				  << "  DM enc  1 input_A.png example.dat\n"
 				  << "  DM dec  1 input_A.png input_B.png\n"
 				  << "  DM info 1 input_A.png\n"
