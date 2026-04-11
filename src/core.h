@@ -4,7 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
-#include <random>
+#include <sodium.h>
 
 #include "util.h"
 #include "hashutil.h"
@@ -14,6 +14,57 @@
 
 #include <stb_image_write.h>
 
+
+/// @brief ChaCha20 PRNG (using libsodium)
+class ChaCha20RNG {
+private:
+    uint8_t key[crypto_stream_chacha20_KEYBYTES];
+    uint8_t nonce[crypto_stream_chacha20_NONCEBYTES];
+    uint64_t counter;
+    uint8_t buffer[64];
+    size_t buffer_pos;
+
+public:
+    // --- UniformRandomBitGenerator requirements ---
+    using result_type = uint32_t;
+    static constexpr result_type min() { return 0; }
+    static constexpr result_type max() { return UINT32_MAX; }
+    // ----------------------------------------------
+
+    ChaCha20RNG(uint32_t seed) : counter(0), buffer_pos(64) {
+        memset(key, 0, crypto_stream_chacha20_KEYBYTES);
+        memset(nonce, 0, crypto_stream_chacha20_NONCEBYTES);
+        memset(buffer, 0, 64);
+
+        uint8_t hash[32];
+        uint8_t seed_bytes[4];
+        seed_bytes[0] = (seed >> 0) & 0xFF;
+        seed_bytes[1] = (seed >> 8) & 0xFF;
+        seed_bytes[2] = (seed >> 16) & 0xFF;
+        seed_bytes[3] = (seed >> 24) & 0xFF;
+
+        crypto_hash_sha256(hash, seed_bytes, 4);
+        memcpy(key, hash, crypto_stream_chacha20_KEYBYTES);
+    }
+
+    result_type operator()() {
+        if (buffer_pos >= 64) {
+            memset(buffer, 0, 64);
+            memcpy(nonce, &counter,
+                sizeof(counter) < crypto_stream_chacha20_NONCEBYTES
+                    ? sizeof(counter)
+                    : crypto_stream_chacha20_NONCEBYTES);
+            crypto_stream_chacha20(buffer, 64, nonce, key);
+            counter++;
+            buffer_pos = 0;
+        }
+
+        result_type result;
+        memcpy(&result, buffer + buffer_pos, sizeof(result_type)); // UB回避
+        buffer_pos += sizeof(result_type);
+        return result;
+    }
+};
 
 void encode(Mode mode, const std::string& inputPng, const std::string& inputBin, const std::string& output) {
 	std::string ext = fs::path(inputBin).extension().string().substr(1);
@@ -25,7 +76,7 @@ void encode(Mode mode, const std::string& inputPng, const std::string& inputBin,
 	// 画像読み込み
 	int imageWidth, imageHeight;
 	std::vector<Pixel> pixels = loadPNG(inputPng, imageWidth, imageHeight);
-	uint32_t seed = fnv1a(pixels);
+	uint32_t seed = hash256_px(pixels);
 
 	// 容量チェック
 	size_t usableBits = countUsableBits(pixels, mode);
@@ -41,7 +92,7 @@ void encode(Mode mode, const std::string& inputPng, const std::string& inputBin,
 	for (int i = 0; i < (int)pixels.size(); i++)
 		indices[i] = i;
 
-	std::mt19937 rng(seed);
+	ChaCha20RNG rng(seed);
 	std::shuffle(indices.begin(), indices.end(), rng);
 
 	// header
@@ -102,7 +153,7 @@ void decode(Mode mode, const std::string& inputOriginalPng, const std::string& i
 	// 元のPNG読み込み
 	int w, h;
 	std::vector<Pixel> originalPixels = loadPNG(inputOriginalPng, w, h);
-	uint32_t seed = fnv1a(originalPixels);
+	uint32_t seed = hash256_px(originalPixels);
 
 	// エンコード済みPNG読み込み
 	int _w, _h;
@@ -113,7 +164,7 @@ void decode(Mode mode, const std::string& inputOriginalPng, const std::string& i
 	for (int i = 0; i < (int)originalPixels.size(); i++)
 		indices[i] = i;
 
-	std::mt19937 rng(seed);
+	ChaCha20RNG rng(seed);
 	std::shuffle(indices.begin(), indices.end(), rng);
 
 	// ビット抽出
@@ -144,6 +195,12 @@ void decode(Mode mode, const std::string& inputOriginalPng, const std::string& i
 	BIN data(extracted.begin() + sizeof(Header),
 	         extracted.begin() + sizeof(Header) + dataBytes);
 
+	Header defa;
+
+	// Header ver 確認
+	if (hd.version != defa.version)
+		throw std::runtime_error("Header version mismatch");
+
 	// CRC32検証
 	if (crc32(data) != hd.crc)
 		throw std::runtime_error("CRC32 verification failed");
@@ -172,7 +229,7 @@ void info(Mode mode, const std::string& imageA, const std::string& imageB) {
 	// 元のPNG読み込み
 	int w, h;
 	std::vector<Pixel> originalPixels = loadPNG(imageA, w, h);
-	uint32_t seed = fnv1a(originalPixels);
+	uint32_t seed = hash256_px(originalPixels);
 
 	// エンコード済みPNG読み込み
 	int _w, _h;
@@ -183,7 +240,7 @@ void info(Mode mode, const std::string& imageA, const std::string& imageB) {
 	for (int i = 0; i < (int)originalPixels.size(); i++)
 		indices[i] = i;
 
-	std::mt19937 rng(seed);
+	ChaCha20RNG rng(seed);
 	std::shuffle(indices.begin(), indices.end(), rng);
 
 	// ビット抽出

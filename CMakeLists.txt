@@ -10,9 +10,13 @@ file(GLOB SOURCES src/*.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SODIUM REQUIRED libsodium)
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/external
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    sodium
 )
