@@ -31,7 +31,7 @@ void encode(Mode mode, const std::string& inputPng, const std::string& inputBin,
 	size_t usableBits = countUsableBits(pixels, mode);
 	size_t requireBits = bin.size() * 8;
 
-	std::cout << "Usable: " << usableBits << "\nRequire: " << requireBits << "\n";
+	std::cout << "Usable: " << formatBits(usableBits) << "\nRequire: " << formatBits(requireBits) << "\n";
 
 	if (requireBits > usableBits)
 		throw std::runtime_error("require > usable");
@@ -158,6 +158,13 @@ void decode(Mode mode, const std::string& inputOriginalPng, const std::string& i
 	outfile.write(reinterpret_cast<char*>(data.data()), data.size());
 	outfile.close();
 
-	std::cout << "Decoded " << dataBytes << " bytes\n"
+	std::cout << "Decoded " << formatBits(dataBytes*8) << "\n"
 			  << "saved to " << outputFile << "\n";
+}
+
+void info(Mode mode, const std::string& path) {
+	int imageWidth, imageHeight;
+	std::vector<Pixel> pixels = loadPNG(path, imageWidth, imageHeight);
+	size_t usableBits = countUsableBits(pixels, mode);
+	std::cout << "Usable: " << formatBits(usableBits) << "\n";
 }
