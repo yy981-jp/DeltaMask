@@ -52,18 +52,23 @@ uint8_t readDelta2(uint8_t original, uint8_t encoded) {
 		case -1: return 1u;
 		case  1: return 2u;
 		case  2: return 3u;
-		default: return 0u;
+		default:
+			// std::cerr << "unexpected delta: " << delta 
+			// 	<< " (orig=" << (int)original 
+			// 	<< " enc=" << (int)encoded << ")\n";
+			return 0u;
 	}
 }
 
 void write(BitStream& bs, uint8_t& ch, Mode mode) {
-	if (canUseChannel(ch, mode)) {
-		uint8_t b = bs.getBits(bitsPerChannel(mode));
-		switch (mode) {
-			case Mode::Bit1: applyDelta1(ch, b); break;
-			case Mode::Bit2: applyDelta2(ch, b); break;
-		}
-	}
+    if (canUseChannel(ch, mode)) {
+        if (!bs.hasBits(bitsPerChannel(mode))) return;  // ← 追加
+        uint8_t b = bs.getBits(bitsPerChannel(mode));
+        switch (mode) {
+            case Mode::Bit1: applyDelta1(ch, b); break;
+            case Mode::Bit2: applyDelta2(ch, b); break;
+        }
+    }
 }
 
 std::string formatBits(uint32_t bits) {

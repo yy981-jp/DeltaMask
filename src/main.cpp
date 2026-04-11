@@ -11,6 +11,7 @@ int main(int argc, char* argv[]) {
 				  << "  DM enc  1 input_A.png example.dat\n"
 				  << "  DM dec  1 input_A.png input_B.png\n"
 				  << "  DM info 1 input_A.png\n"
+				  << "  DM info 1 input_A.png input_B.png\n"
 				  << "          ^ -- bit mode {1,2} \n";
 		return 0;
 	}
@@ -25,6 +26,7 @@ int main(int argc, char* argv[]) {
 		decode(mode, carg[3], carg[4], output);
 	} else if (is_or(carg[1], "i", "info")) {
 		// info mode
-		info(mode,carg[3]);
+		if (carg.size() == 4) info(mode,carg[3]);
+		if (carg.size() == 5) info(mode,carg[3],carg[4]);
 	}
 }
