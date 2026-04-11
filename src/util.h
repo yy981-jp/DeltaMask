@@ -2,6 +2,8 @@
 #include "def.h"
 #include "BitStream.h"
 
+#include <iomanip>
+
 
 bool canUseChannel(uint8_t A, Mode mode) {
 	switch (mode) {
@@ -62,4 +64,23 @@ void write(BitStream& bs, uint8_t& ch, Mode mode) {
 			case Mode::Bit2: applyDelta2(ch, b); break;
 		}
 	}
+}
+
+std::string formatBits(uint32_t bits) {
+	static constexpr std::array<std::string, 7> units = {
+		"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"
+	};
+
+	double v = static_cast<double>(bits) / 8;
+	std::size_t i = 0;
+
+	while (v >= 1024.0 && i + 1 < units.size()) {
+		v /= 1024.0;
+		++i;
+	}
+
+	std::ostringstream oss;
+	oss << std::fixed << std::setprecision(i == 0 ? 0 : 2)
+		<< v << " " << units[i];
+	return oss.str();
 }
