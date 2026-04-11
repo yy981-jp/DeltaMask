@@ -63,14 +63,12 @@ void encode(Mode mode, const std::string& inputPng, const std::string& inputBin,
 
 	// encode本体
 	for (int idx : indices) {
+		if (!bs.hasBits(1)) break;  // 1bit以上残っていれば続ける
+		
 		Pixel& p = pixels[idx];
-
-		if (!bs.hasBits(bitsPerChannel(mode) * 3))
-			break;
-
-        write(bs, p.r, mode);
-        write(bs, p.g, mode);
-        write(bs, p.b, mode);
+		write(bs, p.r, mode);
+		write(bs, p.g, mode);
+		write(bs, p.b, mode);
 	}
 
 	// PNG出力
@@ -79,6 +77,7 @@ void encode(Mode mode, const std::string& inputPng, const std::string& inputBin,
 					pixels.data(), imageWidth * 3 // bytes
 				)
 		) throw std::runtime_error("faied to write png");
+	std::cout << "saved to " << output << "\n";
 }
 
 
@@ -150,7 +149,7 @@ void decode(Mode mode, const std::string& inputOriginalPng, const std::string& i
 		throw std::runtime_error("CRC32 verification failed");
 
 	// ファイル出力
-	std::string outputFile = output + "." + hd.ext;
+	std::string outputFile = output + ".dmo." + hd.ext;
 	std::ofstream outfile(outputFile, std::ios::binary);
 	if (!outfile)
 		throw std::runtime_error("Failed to open output file");
@@ -167,4 +166,49 @@ void info(Mode mode, const std::string& path) {
 	std::vector<Pixel> pixels = loadPNG(path, imageWidth, imageHeight);
 	size_t usableBits = countUsableBits(pixels, mode);
 	std::cout << "Usable: " << formatBits(usableBits) << "\n";
+}
+
+void info(Mode mode, const std::string& imageA, const std::string& imageB) {
+	// 元のPNG読み込み
+	int w, h;
+	std::vector<Pixel> originalPixels = loadPNG(imageA, w, h);
+	uint32_t seed = fnv1a(originalPixels);
+
+	// エンコード済みPNG読み込み
+	int _w, _h;
+	std::vector<Pixel> encodedPixels = loadPNG(imageB, _w, _h);
+
+	// indices生成＆shuffle
+	std::vector<int> indices(originalPixels.size());
+	for (int i = 0; i < (int)originalPixels.size(); i++)
+		indices[i] = i;
+
+	std::mt19937 rng(seed);
+	std::shuffle(indices.begin(), indices.end(), rng);
+
+	// ビット抽出
+	BitWriter bw;
+	for (int idx : indices) {
+		Pixel& original = originalPixels[idx];
+		Pixel& encoded = encodedPixels[idx];
+
+		read(bw, original.r, encoded.r, mode);
+		read(bw, original.g, encoded.g, mode);
+		read(bw, original.b, encoded.b, mode);
+	}
+	bw.flush();
+
+	// HeaderとDataを分離
+	const BIN& extracted = bw.get();
+	if (extracted.size() < sizeof(Header))
+		throw std::runtime_error("Extracted data too small for header");
+
+	Header hd;
+	memcpy(&hd, extracted.data(), sizeof(Header));
+
+	std::cout << "ver:\t" << static_cast<int>(hd.version) << "\n"
+			  << "size:\t" << formatBits(hd.bitSize) << "\n"
+			  << "CRC32:\t" << hd.crc << "\n"
+			  << "ext:\t" << hd.ext << "\n"
+			  << "flag:\t" << hd.flags << "\n";
 }
