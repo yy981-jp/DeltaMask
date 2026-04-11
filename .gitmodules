@@ -1,0 +1,3 @@
+[submodule "external/yy981"]
+	path = external/yy981
+	url = https://github.com/yy981-jp/tools.git
