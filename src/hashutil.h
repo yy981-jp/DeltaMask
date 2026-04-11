@@ -1,20 +1,22 @@
 #pragma once
 #include "def.h"
+#include <sodium.h>
+#include <cstring>
 
-
-/// @brief fnv-1a hash
+/// @brief SHA-256 hash (using libsodium)
 /// @param data 
 /// @return 256bit hash
 uint32_t hash256(const BIN& data) {
-	uint32_t hash = 2166136261u;
-
-	for (size_t i = 0; i < data.size(); i++) {
-		hash ^= data[i];
-		hash *= 16777619u;
-	}
-
-	return hash;
+	uint8_t hash[crypto_hash_sha256_BYTES];
+	crypto_hash_sha256(hash, data.data(), data.size());
+	
+	// Return first 32-bit of hash
+	return (uint32_t)hash[0] << 24 | (uint32_t)hash[1] << 16 | 
+	       (uint32_t)hash[2] << 8 | (uint32_t)hash[3];
 }
+
+/// @brief OBSOLETE - kept for compatibility, use hash256 instead
+struct _SHA256_CTX_DEPRECATED {};
 
 uint32_t crc32(const BIN& data) {
 	static uint32_t table[256];
@@ -43,20 +45,16 @@ uint32_t crc32(const BIN& data) {
 	return crc ^ 0xFFFFFFFFu;
 }
 
-uint32_t fnv1a(const std::vector<Pixel>& pixels) {
-	uint32_t hash = 2166136261u;
-
-	for (auto& p : pixels) {
-		hash ^= p.r;
-		hash *= 16777619u;
-
-		hash ^= p.g;
-		hash *= 16777619u;
-
-		hash ^= p.b;
-		hash *= 16777619u;
+/// @brief SHA-256 hash for pixel data
+/// @param pixels 
+/// @return 256bit hash
+uint32_t hash256_px(const std::vector<Pixel>& pixels) {
+	BIN data;
+	for (const auto& p : pixels) {
+		data.push_back(p.r);
+		data.push_back(p.g);
+		data.push_back(p.b);
 	}
-
-	return hash;
+	return hash256(data);
 }
 

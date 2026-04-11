@@ -6,7 +6,7 @@
 #pragma pack(push, 1)
 struct Header {
 	uint32_t magic = 0x5944544D; // YDTM (= yy981 DeltaMask)
-	uint8_t version = 1;
+	uint8_t version = 2; // sodium
 
     uint8_t flags = 0;
 
